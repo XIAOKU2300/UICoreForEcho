@@ -356,7 +356,8 @@ def tier_color(tier: str) -> Tuple[int, int, int, int]:
 def sonata_panel(draw: ImageDraw.ImageDraw, bbox, sonata_rgba,
                  highlight: bool = False) -> None:
     """方案D 专用毛玻璃面板: 在 holo_panel 基础上把顶部高光线和左侧色条染成套装色。
-    bbox = (x0, y0, x1, y1) 局部坐标。"""
+    bbox = (x0, y0, x1, y1) 局部坐标。
+    设计修复 v2: 去掉顶部14px白光带和底部反光线 — 5卡堆叠时会形成鬼影/重影"""
     x0, y0, x1, y1 = bbox
     fill = PANEL_FILL_HI if highlight else PANEL_FILL
 
@@ -366,14 +367,7 @@ def sonata_panel(draw: ImageDraw.ImageDraw, bbox, sonata_rgba,
     except AttributeError:
         draw.rectangle((x0, y0, x1, y1), fill=fill)
 
-    # 顶部亮带渐隐(毛玻璃顶部光照感)
-    glow_h = 14
-    for i in range(glow_h):
-        a = int(28 * (1 - i / glow_h))
-        draw.line([(x0 + RADIUS, y0 + 1 + i), (x1 - RADIUS, y0 + 1 + i)],
-                  fill=(255, 255, 255, a))
-
-    # 顶边发光线 (套装色, 2px)
+    # 顶边单一发光线 (套装色, 1.5px 等效) — 不再叠白光带
     draw.line([(x0 + RADIUS, y0 + 1), (x1 - RADIUS, y0 + 1)],
               fill=sonata_rgba, width=2)
 
@@ -385,27 +379,26 @@ def sonata_panel(draw: ImageDraw.ImageDraw, bbox, sonata_rgba,
     bar_h = max(1, bar_bot - bar_top)
     for j in range(bar_h):
         t = j / bar_h
-        # 上端饱和 → 下端略淡 (透明度从 220 → 120)
-        a = int(220 - 100 * t)
+        # 上端饱和 → 下端略淡 (透明度从 200 → 100)
+        a = int(200 - 100 * t)
         c = (sonata_rgba[0], sonata_rgba[1], sonata_rgba[2], a)
         draw.line([(bar_x, bar_top + j), (bar_x + bar_w - 1, bar_top + j)],
                   fill=c)
 
-    # 极细玻璃折射边
+    # 极细玻璃折射边 (统一明度,不再加底部反光)
     try:
         draw.rounded_rectangle((x0, y0, x1, y1), radius=RADIUS,
-                               outline=(200, 220, 255, 35), width=1)
+                               outline=(200, 220, 255, 30), width=1)
     except (AttributeError, TypeError):
-        draw.rectangle((x0, y0, x1, y1), outline=(200, 220, 255, 35), width=1)
+        draw.rectangle((x0, y0, x1, y1), outline=(200, 220, 255, 30), width=1)
 
-    # 底部 1px 弱反光 (套装色)
-    bottom_glow = (sonata_rgba[0], sonata_rgba[1], sonata_rgba[2], 50)
-    draw.line([(x0 + RADIUS, y1 - 1), (x1 - RADIUS, y1 - 1)],
-              fill=bottom_glow, width=1)
-
-    # 角卡扣折线: 用套装色 + 较细
-    corner_brackets(draw, (x0, y0, x1, y1), length=9,
-                    color=sonata_rgba, width=1)
+    # 角卡扣: 仅左上 + 右上 (底部不画, 避免相邻卡片底/顶卡扣对撞)
+    L = 9
+    c = sonata_rgba
+    # 左上
+    draw.line([(x0, y0 + L), (x0, y0), (x0 + L, y0)], fill=c, width=1)
+    # 右上
+    draw.line([(x1 - L, y0), (x1, y0), (x1, y0 + L)], fill=c, width=1)
 
 
 def sonata_pill(draw: ImageDraw.ImageDraw, xy, text_str: str,
