@@ -96,6 +96,41 @@ TIER_BAD  = (150, 160, 175, 255)         # 暗灰（劣 — 收弱不删除）
 TIER_DOT_R = 4                            # 副词条行首小色点半径
 
 # ──────────────────────────────────────────────────────────
+# 着重词条高亮色 (EMPHASIS / Spotlight Highlight) — 方案D 后期加重 hook
+# 用途: 对「双爆」「元素伤害」等关键词条做加重高亮显示。
+# 设计原则:
+#   - 高彩度 (OKLch chroma ≥ 0.18) + 中亮度 (L 65~78),
+#     在毛玻璃深底 (PANEL_FILL) 上对比度 ≥ 7:1, 醒目但不刺眼。
+#   - 与 TIER 色阶解耦: TIER 表「这条词条好不好」, EMPHASIS 表「这类词条该被注意」。
+#     优先级 EMPHASIS > TIER (一条 暴击+神级 → 取 CRIT_HL)。
+#
+# 切换方式: right_echo_card 副词条循环里调 emphasis_for(prop.name);
+#         返回 None 时维持 tier 色, 默认不破坏现有视觉。
+# ──────────────────────────────────────────────────────────
+CRIT_HL   = (255, 215, 95, 255)          # 暴击 / 暴击伤害 — 琥珀金 (鸣潮暴击官方色系)
+DMG_HL    = (255, 130, 220, 255)         # 元素伤害加成 — 霓虹玫粉 (跳出蓝绿主调不撞套装色)
+ENERGY_HL = (120, 255, 220, 255)         # 共鸣效率 — 冰荧青 (能量感视觉锚)
+ATK_HL    = (255, 160, 100, 255)         # 攻击% / 生命% / 防御% — 熔橙 (攻击系恒色)
+HEAL_HL   = (180, 255, 130, 255)         # 治疗效果加成 — 嫩绿 (生命系)
+
+# 名称 → 高亮色 (按 in 包含匹配, 命中即返回; 顺序即优先级)
+# 设计师可在此增删调序; 默认全部启用, 若需关闭某类只需注释对应行
+EMPHASIS_MAP = [
+    ("暴击伤害",   CRIT_HL),
+    ("暴击",       CRIT_HL),
+    ("双爆",       CRIT_HL),
+    ("共鸣效率",   ENERGY_HL),
+    ("治疗效果",   HEAL_HL),
+    ("伤害加成",   DMG_HL),    # 冷凝/熔燃/衍射... 等元素伤
+    ("攻击",       ATK_HL),    # 攻击 / 攻击百分比 都命中
+    ("生命",       ATK_HL),
+    ("防御",       ATK_HL),
+]
+
+# 是否启用 EMPHASIS 着重 (设计师后期可改 False 一键回到纯 tier 色)
+EMPHASIS_ON = False
+
+# ──────────────────────────────────────────────────────────
 # 布局常量
 # ──────────────────────────────────────────────────────────
 CARD_W = 1200
@@ -467,56 +502,97 @@ def glow_circle(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int,
 
 
 # ──────────────────────────────────────────────────────────
-# 方案D - 声骸卡片专属原语
+# 着重词条 hook (后期加重用)
 # ──────────────────────────────────────────────────────────
-def sonata_color(name: Optional[str]) -> Tuple[int, int, int, int]:
-    """根据声骸/套装名取识别色。未命中则返回兜底银蓝。
-    匹配规则: 完整名 > 包含关键字 > 单字降级。
-    TODO[后端对接]: 后端补 set_name 字段后, 这里改为直接 SONATA_COLORS.get(set_name)。"""
-    if not name:
-        return SONATA_FALLBACK
-    key = str(name).replace("·", " ").strip()
-    if key in SONATA_COLORS:
-        return SONATA_COLORS[key]
-    for sname, color in SONATA_COLORS.items():
-        if sname in key or key in sname:
+def emphasis_for(prop_name: Optional[str]) -> Optional[Tuple[int, int, int, int]]:
+    """词条名 → 着重高亮色; 命中返回 RGBA, 未命中或 EMPHASIS_ON=False 返回 None。
+
+    用法 (right_echo_card 副词条循环):
+        hl = th.emphasis_for(prop.name)
+        val_color = hl if hl is not None else tier_c
+
+    扩展时只改 EMPHASIS_MAP / EMPHASIS_ON 即可, 不需要动业务代码。
+    """
+    if not EMPHASIS_ON or not prop_name:
+        return None
+    name = str(prop_name)
+    for keyword, color in EMPHASIS_MAP:
+        if keyword in name:
             return color
-    keyword_map = [
-        ("凝", SONATA_COLORS.get("凝夜白霜")),
-        ("熔", SONATA_COLORS.get("熔山裂谷")),
-        ("雷", SONATA_COLORS.get("彻空冥雷")),
-        ("风", SONATA_COLORS.get("啸谷长风")),
-        ("沉日", SONATA_COLORS.get("沉日劫明")),
-        ("回光", SONATA_COLORS.get("隐世回光")),
-        ("不绝", SONATA_COLORS.get("不绝余音")),
-    ]
-    for kw, col in keyword_map:
-        if col and kw in key:
-            return col
-    return SONATA_FALLBACK
+    return None
 
 
-def tier_from_color(color) -> Tuple[int, int, int, int]:
-    """从 adapter 旧式色标反推副词条 tier 色。
-    紫族→TIER_GOD / 绿族→TIER_GOOD / 红族→TIER_BAD / 其他→TIER_NORMAL。"""
-    if color is None:
-        return TIER_NORMAL
+
+# ──────────────────────────────────────────────────────────
+# 方案D - cost pip 阵 + grade chip (echo_card / mid_echo_summary 用)
+# ──────────────────────────────────────────────────────────
+def cost_pips(draw: ImageDraw.ImageDraw, x: int, y: int, cost: Optional[int],
+              accent: Optional[Tuple[int, int, int, int]] = None,
+              max_cost: int = 4) -> int:
+    """Cost 菱形 pip 阵: cost 个发光菱形 + 暗色占位补到 max_cost。
+    返回最右端 x。 (x, y) 为左上锚点。"""
+    if cost is None or cost < 0:
+        cost = 0
+    pip_w = 9
+    gap = 4
+    color = accent or (180, 200, 230, 255)
+    for i in range(max_cost):
+        cx = x + i * (pip_w + gap) + pip_w // 2
+        diamond = [
+            (cx, y),
+            (cx + pip_w // 2, y + pip_w // 2),
+            (cx, y + pip_w),
+            (cx - pip_w // 2, y + pip_w // 2),
+        ]
+        if i < cost:
+            draw.polygon(diamond, fill=color)
+            draw.point((cx, y + pip_w // 2), fill=(255, 255, 255, 255))
+        else:
+            draw.polygon(diamond, outline=(120, 130, 160, 140))
+    return x + max_cost * (pip_w + gap)
+
+
+def grade_chip(draw: ImageDraw.ImageDraw, x: int, y: int,
+               grade: Optional[str], anchor: str = "rm") -> None:
+    """评级胶囊: 圆角小标签, 文字反白底主题色 (用 GRADE_COLORS)。"""
+    if not grade:
+        return
+    g = str(grade).upper()
+    bg = grade_color(g)
+    fnt = font("tektur", 18)
     try:
-        r, g, b = color[0], color[1], color[2]
+        tw = int(fnt.getlength(g))
     except Exception:
-        return TIER_NORMAL
-    if r > 150 and b > 200 and g < 180:
-        return TIER_GOD
-    if g > 180 and r < 120:
-        return TIER_GOOD
-    if r > 220 and b < 130 and g < 130:
-        return TIER_BAD
-    return TIER_NORMAL
+        tw = len(g) * 10
+    pad_x = 9
+    w = tw + pad_x * 2
+    h = 22
+    if anchor == "rm":
+        x0 = x - w
+        y0 = y - h // 2
+    elif anchor == "lm":
+        x0 = x
+        y0 = y - h // 2
+    else:  # mm
+        x0 = x - w // 2
+        y0 = y - h // 2
+    x1 = x0 + w
+    y1 = y0 + h
+    try:
+        draw.rounded_rectangle((x0, y0, x1, y1), radius=11, fill=bg)
+    except AttributeError:
+        draw.rectangle((x0, y0, x1, y1), fill=bg)
+    # 文字 — 深色, 与亮底色形成反差
+    draw.text((x0 + w // 2, y0 + h // 2 - 1), g, font=fnt,
+              fill=(20, 24, 36, 255), anchor="mm")
 
 
+# ──────────────────────────────────────────────────────────
+# 方案D - cost pip + 评级 chip (right_echo_card / mid_echo_summary 用)
+# ──────────────────────────────────────────────────────────
 def cost_pips(draw: ImageDraw.ImageDraw, x: int, y: int, cost: Optional[int],
               accent=None, max_cost: int = 4) -> int:
-    """绘制 cost 菱形 pip 阵: 1/3/4 cost 用 1/3/4 个发光菱形 + 暗色占位。
+    """绘制 cost 菱形 pip 阵: 当前 cost 实心 + 套装色, 剩余位置空心暗色描边。
     返回最右端 x。 (x, y) 为左上锚点。"""
     if cost is None or cost <= 0:
         cost = 0
@@ -537,7 +613,7 @@ def cost_pips(draw: ImageDraw.ImageDraw, x: int, y: int, cost: Optional[int],
 
 def grade_chip(draw: ImageDraw.ImageDraw, x: int, y: int, grade: Optional[str],
                anchor: str = "rm") -> None:
-    """评级胶囊: 圆角小标签, grade文字反白底主题色。"""
+    """评级胶囊: 圆角小标签, grade 文字反白底主题色。"""
     if not grade:
         return
     g = grade.upper()
@@ -567,44 +643,3 @@ def grade_chip(draw: ImageDraw.ImageDraw, x: int, y: int, grade: Optional[str],
         draw.rectangle((x0, y0, x1, y1), fill=bg)
     draw.text((x0 + w // 2, y0 + h // 2 - 1), g, font=fnt,
               fill=(20, 24, 36, 255), anchor="mm")
-
-
-def score_bar(draw: ImageDraw.ImageDraw, bbox, score: Optional[float],
-              max_score: float = 50.0, accent=None) -> None:
-    """卡片底部细评分条 — 把 score 可视化成进度条占比。
-    bbox=(x0,y0,x1,y1), y1-y0 一般 3-4px。"""
-    x0, y0, x1, y1 = bbox
-    total_w = x1 - x0
-    radius = max(1, (y1 - y0) // 2)
-    try:
-        draw.rounded_rectangle((x0, y0, x1, y1), radius=radius,
-                               fill=(60, 75, 100, 140))
-    except AttributeError:
-        draw.rectangle((x0, y0, x1, y1), fill=(60, 75, 100, 140))
-    if score is None or score <= 0:
-        return
-    ratio = min(1.0, max(0.0, score / max_score))
-    fw = int(total_w * ratio)
-    if fw < 2:
-        return
-    color = accent or ACCENT_CYAN
-    try:
-        draw.rounded_rectangle((x0, y0, x0 + fw, y1), radius=radius, fill=color)
-    except AttributeError:
-        draw.rectangle((x0, y0, x0 + fw, y1), fill=color)
-    if fw >= 4:
-        draw.ellipse((x0 + fw - 3, y0 - 1, x0 + fw + 3, y1 + 1),
-                     fill=(color[0], color[1], color[2], 200))
-
-
-def side_accent_bar(draw: ImageDraw.ImageDraw, x: int, y0: int, y1: int,
-                    color, w: int = 4) -> None:
-    """卡片左侧色条 — 套装识别用。圆头胶囊形, 顶端微光。"""
-    radius = w // 2
-    try:
-        draw.rounded_rectangle((x, y0 + 4, x + w, y1 - 4), radius=radius,
-                               fill=color)
-    except AttributeError:
-        draw.rectangle((x, y0 + 4, x + w, y1 - 4), fill=color)
-    draw.ellipse((x - 1, y0 + 2, x + w + 1, y0 + 8),
-                 fill=(color[0], color[1], color[2], 180))

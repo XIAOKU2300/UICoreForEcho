@@ -109,8 +109,21 @@ def render_card(data: schema.CardData, bg_image: Optional[Image.Image] = None) -
         if res:
             flow.place(img, res[0], res[1])
     # 中轨可选: 声骸加成汇总(只有 data.echo_summary 不为 None 才绘制)
+    # 方案D: 把 echoes 也传进来,让 summary 能画"套装组合带"和"Cost总览"
     if getattr(data, "echo_summary", None) is not None:
-        res = _try_block("mid_echo_summary", data.echo_summary, theme)
+        try:
+            if _AS_PKG:
+                mod = importlib.import_module(".blocks.mid_echo_summary",
+                                              package=__package__)
+            else:
+                mod = importlib.import_module("blocks.mid_echo_summary")
+            res = mod.render(data.echo_summary, theme, echoes=data.echoes)
+        except (ModuleNotFoundError, TypeError):
+            # 兼容旧签名 (没有 echoes 参数)
+            res = _try_block("mid_echo_summary", data.echo_summary, theme)
+        except Exception as e:
+            print(f"[render_card] mid_echo_summary error: {e}")
+            res = None
         if res:
             mid.place(img, res[0], res[1])
 

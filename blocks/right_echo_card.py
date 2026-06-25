@@ -37,7 +37,9 @@ def render(data: Any, th: Any):
         return layer, H
 
     # ── 套装色 + 染色毛玻璃面板 ──────────────────────────────
-    sonata_name = getattr(data, "sonata", None)
+    # 优先用后端补好的 sonata 字段, 否则从 echo name 模糊匹配
+    # TODO[后端对接]: 补上 EchoCardData.sonata = "凝夜白霜"/"熔山裂谷"/...
+    sonata_name = getattr(data, "sonata", None) or data.name
     sonata_rgba = th.sonata_color(sonata_name)
     th.sonata_panel(draw, (0, 0, W, H), sonata_rgba)
 
@@ -69,16 +71,26 @@ def render(data: Any, th: Any):
     th.text(draw, (name_x, icon_y + 6), data.name,
             th.TextLevel.LABEL, color=th.TEXT_MAIN)
 
-    # 等级 + COST (ACCENT 小)
-    cost_str = f"·{data.cost}C" if getattr(data, "cost", None) is not None else ""
-    lv_str = f"Lv.{data.level}{cost_str}" if data.level is not None else cost_str.lstrip("·")
-    if lv_str:
-        th.text(draw, (name_x, icon_y + 26), lv_str,
+    # 等级 (MICRO)
+    if data.level is not None:
+        th.text(draw, (name_x, icon_y + 26), f"Lv.{data.level}",
                 th.TextLevel.MICRO, color=th.TEXT_SUB)
+        if data.level >= 25:
+            th.text(draw, (name_x + 42, icon_y + 26), "MAX",
+                    th.TextLevel.MICRO, color=th.ACCENT_CYAN)
 
-    # 套装pill (右上角)
-    if sonata_name:
-        th.sonata_pill(draw, (W - 14, icon_y + 2), sonata_name,
+    # Cost 菱形 pip — 可视化 cost 占用
+    if getattr(data, "cost", None) is not None and data.cost > 0:
+        pip_x = name_x + 90
+        th.cost_pips(draw, pip_x, icon_y + 22, data.cost,
+                     accent=sonata_rgba, max_cost=4)
+
+    # 套装pill (右上角) — 仅当后端真的传了套装名时显示
+    # echo name 本身不是套装名, 不在 SONATA_COLORS key 里的不画 pill
+    # TODO[后端对接]: 补 EchoCardData.sonata 后, 把判断条件改成 if sonata_name
+    real_sonata = getattr(data, "sonata", None)
+    if real_sonata and real_sonata in th.SONATA_COLORS:
+        th.sonata_pill(draw, (W - 14, icon_y + 2), real_sonata,
                        sonata_rgba, anchor="rt")
 
     # ── 主词条强调区 (y≈64) ──────────────────────────────────
@@ -111,7 +123,15 @@ def render(data: Any, th: Any):
         tier = th.classify_tier(col_i)
         c = th.tier_color(tier)
 
-        # 行首色点 (tier 视觉锚)
+        # ── EMPHASIS HOOK ───────────────────────────────────
+        # 后期对「双爆」「元素伤害」等关键词条加重: 在 theme.py 切
+        # EMPHASIS_ON=True 即可全局生效, 这里无需改动。
+        # 命中 → 数值用 EMPHASIS 色覆盖 tier 色, 名字降饱和; 行首
+        # 色点保留 tier 色 — 区分「这条好不好」和「这条该被注意」。
+        emphasis_c = th.emphasis_for(prop.name)
+        text_c = emphasis_c if emphasis_c is not None else c
+
+        # 行首色点 (tier 视觉锚, EMPHASIS 不影响色点)
         dot_r = th.TIER_DOT_R
         dot_cx = 22
         dot_cy = y
@@ -127,20 +147,20 @@ def render(data: Any, th: Any):
                 fill=c,
             )
 
-        # 名字 (劣词条: TIER_BAD; 普通: TEXT_SUB; 神/优: tier 色淡)
-        if tier == "bad":
+        # 名字: 命中 EMPHASIS → 高亮色降饱和(避免与值同色互冲);
+        #       否则按 tier 走 (劣→TIER_BAD, 其他→TEXT_SUB)
+        if emphasis_c is not None:
+            name_color = (emphasis_c[0], emphasis_c[1], emphasis_c[2], 180)
+        elif tier == "bad":
             name_color = th.TIER_BAD
-        elif tier in ("god", "good"):
-            # 名字用次色保持可读, 让值发光
-            name_color = th.TEXT_SUB
         else:
             name_color = th.TEXT_SUB
         th.text(draw, (32, y), prop.name,
                 th.TextLevel.MICRO, color=name_color)
 
-        # 值 (tier 色, 右对齐)
+        # 值 (右对齐, EMPHASIS 命中即用高亮色, 否则 tier 色)
         th.text(draw, (W - 18, y), prop.value,
-                th.TextLevel.MICRO, color=c, anchor="rm")
+                th.TextLevel.MICRO, color=text_c, anchor="rm")
 
     # ── 评分进度条 (右下角, y≈y0+5*row_h+8) ────────────────
     sc = data.score
@@ -158,10 +178,9 @@ def render(data: Any, th: Any):
         score_text = "--"
     th.text(draw, (18, bar_y + 8), score_text,
             th.TextLevel.ACCENT, color=sonata_rgba)
-    # 等级 (中间偏右)
+    # 评级 chip (评分右侧, 胶囊小标签)
     if grade:
-        th.text(draw, (90, bar_y + 8), grade,
-                th.TextLevel.LABEL, color=th.grade_color(grade))
+        th.grade_chip(draw, 92, bar_y + 8, grade, anchor="lm")
 
     # 进度条 (右半)
     bar_x0, bar_x1 = 130, W - 18
