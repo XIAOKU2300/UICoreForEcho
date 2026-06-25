@@ -50,6 +50,52 @@ GRADE_COLORS = {
 }
 
 # ──────────────────────────────────────────────────────────
+# 声骸套装色调 (方案D - 声骸卡片重设计)
+# 用于卡片左侧色条 + 套装名 pill + 顶部高光线
+# 主色为饱和明亮的鸣潮渲染感配色
+# ──────────────────────────────────────────────────────────
+SONATA_COLORS = {
+    # 冰系
+    "凝夜白霜": (130, 220, 255, 255),     # 冰蓝
+    # 火系
+    "熔山裂谷": (255, 130, 70, 255),      # 熔橙
+    # 雷/紫
+    "彻空冥雷": (190, 130, 255, 255),     # 雷紫
+    "行幽墨翟": (150, 90, 220, 255),      # 深紫
+    # 风/青
+    "啸谷长风": (110, 230, 195, 255),     # 青翠
+    "翎羽迷踪": (110, 230, 195, 255),     # 同风系
+    # 衍射/玫
+    "漪澜浮录": (255, 110, 170, 255),     # 玫粉
+    # 湮灭/金
+    "浮星祛暗": (255, 210, 90, 255),      # 暖金
+    "不绝余音": (255, 200, 60, 255),      # 强金
+    # 沉日/暗
+    "沉日劫明": (200, 100, 120, 255),     # 暗玫
+    # 治疗 / 嫩绿
+    "隐世回光": (170, 240, 130, 255),     # 嫩绿
+    # 辅助 / 浅紫
+    "轻云出月": (200, 180, 255, 255),     # 浅紫
+    # 攻击共鸣 / 红
+    "凌冽决断之心": (255, 140, 120, 255),
+    # 防御 / 暖白
+    "永夜星辰": (220, 230, 255, 255),
+}
+SONATA_FALLBACK = (180, 200, 230, 255)    # 未知套装兜底（中性银蓝）
+
+# 词条层级色 (方案D - 词条评级显式化)
+# 主词条/副词条按 adapter 传入的 sub_colors 反推 tier：
+#   ACCENT_VIOLET → TIER_GOD     (神级)
+#   SUCCESS       → TIER_GOOD    (优秀)
+#   None          → TIER_NORMAL  (普通)
+#   ERROR         → TIER_BAD     (劣)
+TIER_GOD  = (200, 150, 255, 255)         # 紫光（最高级）
+TIER_GOOD = (90, 230, 170, 255)          # 翠绿（优）
+TIER_NORMAL = (240, 245, 252, 255)       # 偏白（普）
+TIER_BAD  = (150, 160, 175, 255)         # 暗灰（劣 — 收弱不删除）
+TIER_DOT_R = 4                            # 副词条行首小色点半径
+
+# ──────────────────────────────────────────────────────────
 # 布局常量
 # ──────────────────────────────────────────────────────────
 CARD_W = 1200
@@ -235,6 +281,161 @@ def grade_color(grade: Optional[str]) -> Tuple[int, int, int, int]:
     return GRADE_COLORS.get(str(grade).lower(), ACCENT_SILVER)
 
 
+# ──────────────────────────────────────────────────────────
+# 方案D 工具函数: 套装色 + 词条 tier
+# ──────────────────────────────────────────────────────────
+def sonata_color(name: Optional[str]) -> Tuple[int, int, int, int]:
+    """套装名 → 主色。未知或 None → SONATA_FALLBACK。"""
+    if not name:
+        return SONATA_FALLBACK
+    # 去掉常见后缀和空白后查表
+    key = str(name).strip().split("·")[0].strip()
+    return SONATA_COLORS.get(key, SONATA_FALLBACK)
+
+
+def classify_tier(color: Optional[Tuple[int, int, int, int]]) -> str:
+    """根据 adapter 传入的颜色反推词条 tier。
+    返回 'god'/'good'/'normal'/'bad' 字符串。"""
+    if color is None:
+        return "normal"
+    rgb = tuple(color[:3])
+    if rgb == ACCENT_VIOLET[:3]:
+        return "god"
+    if rgb == SUCCESS[:3]:
+        return "good"
+    if rgb == ERROR[:3]:
+        return "bad"
+    return "normal"
+
+
+def tier_color(tier: str) -> Tuple[int, int, int, int]:
+    """tier 字符串 → 显示色。"""
+    return {
+        "god": TIER_GOD,
+        "good": TIER_GOOD,
+        "normal": TIER_NORMAL,
+        "bad": TIER_BAD,
+    }.get(tier, TIER_NORMAL)
+
+
+def sonata_panel(draw: ImageDraw.ImageDraw, bbox, sonata_rgba,
+                 highlight: bool = False) -> None:
+    """方案D 专用毛玻璃面板: 在 holo_panel 基础上把顶部高光线和左侧色条染成套装色。
+    bbox = (x0, y0, x1, y1) 局部坐标。"""
+    x0, y0, x1, y1 = bbox
+    fill = PANEL_FILL_HI if highlight else PANEL_FILL
+
+    # 毛玻璃底
+    try:
+        draw.rounded_rectangle((x0, y0, x1, y1), radius=RADIUS, fill=fill)
+    except AttributeError:
+        draw.rectangle((x0, y0, x1, y1), fill=fill)
+
+    # 顶部亮带渐隐(毛玻璃顶部光照感)
+    glow_h = 14
+    for i in range(glow_h):
+        a = int(28 * (1 - i / glow_h))
+        draw.line([(x0 + RADIUS, y0 + 1 + i), (x1 - RADIUS, y0 + 1 + i)],
+                  fill=(255, 255, 255, a))
+
+    # 顶边发光线 (套装色, 2px)
+    draw.line([(x0 + RADIUS, y0 + 1), (x1 - RADIUS, y0 + 1)],
+              fill=sonata_rgba, width=2)
+
+    # 左侧套装色条 (从顶到底, 渐隐的渐变)
+    bar_w = 6
+    bar_x = x0 + 2
+    bar_top = y0 + RADIUS - 2
+    bar_bot = y1 - RADIUS + 2
+    bar_h = max(1, bar_bot - bar_top)
+    for j in range(bar_h):
+        t = j / bar_h
+        # 上端饱和 → 下端略淡 (透明度从 220 → 120)
+        a = int(220 - 100 * t)
+        c = (sonata_rgba[0], sonata_rgba[1], sonata_rgba[2], a)
+        draw.line([(bar_x, bar_top + j), (bar_x + bar_w - 1, bar_top + j)],
+                  fill=c)
+
+    # 极细玻璃折射边
+    try:
+        draw.rounded_rectangle((x0, y0, x1, y1), radius=RADIUS,
+                               outline=(200, 220, 255, 35), width=1)
+    except (AttributeError, TypeError):
+        draw.rectangle((x0, y0, x1, y1), outline=(200, 220, 255, 35), width=1)
+
+    # 底部 1px 弱反光 (套装色)
+    bottom_glow = (sonata_rgba[0], sonata_rgba[1], sonata_rgba[2], 50)
+    draw.line([(x0 + RADIUS, y1 - 1), (x1 - RADIUS, y1 - 1)],
+              fill=bottom_glow, width=1)
+
+    # 角卡扣折线: 用套装色 + 较细
+    corner_brackets(draw, (x0, y0, x1, y1), length=9,
+                    color=sonata_rgba, width=1)
+
+
+def sonata_pill(draw: ImageDraw.ImageDraw, xy, text_str: str,
+                sonata_rgba, anchor: str = "rt") -> None:
+    """套装名小药丸. xy 为锚点位置, anchor 通常 'rt' (右上)。"""
+    # 测宽
+    f = font("misans", 13)
+    try:
+        text_w = int(f.getlength(text_str))
+    except Exception:
+        text_w = len(text_str) * 13
+    pad_x = 8
+    pad_y = 3
+    w = text_w + pad_x * 2
+    h = 18
+
+    x, y = xy
+    if anchor == "rt":
+        x0 = x - w
+        y0 = y
+    elif anchor == "lt":
+        x0 = x
+        y0 = y
+    else:
+        x0 = x - w // 2
+        y0 = y - h // 2
+
+    x1 = x0 + w
+    y1 = y0 + h
+
+    # 半透明套装色底
+    bg_rgba = (sonata_rgba[0], sonata_rgba[1], sonata_rgba[2], 55)
+    try:
+        draw.rounded_rectangle((x0, y0, x1, y1), radius=9, fill=bg_rgba)
+        draw.rounded_rectangle((x0, y0, x1, y1), radius=9,
+                               outline=sonata_rgba, width=1)
+    except (AttributeError, TypeError):
+        draw.rectangle((x0, y0, x1, y1), fill=bg_rgba, outline=sonata_rgba)
+
+    # 文字
+    draw.text((x0 + pad_x, y0 + h // 2), text_str,
+              font=f, fill=sonata_rgba, anchor="lm")
+
+
+def score_bar(draw: ImageDraw.ImageDraw, bbox, value: float, vmax: float,
+              fill_rgba) -> None:
+    """评分进度条. bbox = (x0,y0,x1,y1)."""
+    x0, y0, x1, y1 = bbox
+    # 槽底
+    try:
+        draw.rounded_rectangle((x0, y0, x1, y1), radius=2,
+                               fill=(255, 255, 255, 25))
+    except (AttributeError, TypeError):
+        draw.rectangle((x0, y0, x1, y1), fill=(255, 255, 255, 25))
+    # 填充
+    t = max(0.0, min(1.0, (value or 0.0) / max(0.001, vmax)))
+    fw = int((x1 - x0) * t)
+    if fw > 0:
+        try:
+            draw.rounded_rectangle((x0, y0, x0 + fw, y1), radius=2,
+                                   fill=fill_rgba)
+        except (AttributeError, TypeError):
+            draw.rectangle((x0, y0, x0 + fw, y1), fill=fill_rgba)
+
+
 def paste_layer(base: Image.Image, layer: Image.Image, x: int, y: int) -> None:
     """把局部图层粘到主画布。"""
     base.alpha_composite(layer, dest=(x, y))
@@ -263,3 +464,147 @@ def glow_circle(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int,
         glow = (color[0], color[1], color[2], alpha)
         draw.ellipse((cx - expand, cy - expand, cx + expand, cy + expand),
                      outline=glow, width=1)
+
+
+# ──────────────────────────────────────────────────────────
+# 方案D - 声骸卡片专属原语
+# ──────────────────────────────────────────────────────────
+def sonata_color(name: Optional[str]) -> Tuple[int, int, int, int]:
+    """根据声骸/套装名取识别色。未命中则返回兜底银蓝。
+    匹配规则: 完整名 > 包含关键字 > 单字降级。
+    TODO[后端对接]: 后端补 set_name 字段后, 这里改为直接 SONATA_COLORS.get(set_name)。"""
+    if not name:
+        return SONATA_FALLBACK
+    key = str(name).replace("·", " ").strip()
+    if key in SONATA_COLORS:
+        return SONATA_COLORS[key]
+    for sname, color in SONATA_COLORS.items():
+        if sname in key or key in sname:
+            return color
+    keyword_map = [
+        ("凝", SONATA_COLORS.get("凝夜白霜")),
+        ("熔", SONATA_COLORS.get("熔山裂谷")),
+        ("雷", SONATA_COLORS.get("彻空冥雷")),
+        ("风", SONATA_COLORS.get("啸谷长风")),
+        ("沉日", SONATA_COLORS.get("沉日劫明")),
+        ("回光", SONATA_COLORS.get("隐世回光")),
+        ("不绝", SONATA_COLORS.get("不绝余音")),
+    ]
+    for kw, col in keyword_map:
+        if col and kw in key:
+            return col
+    return SONATA_FALLBACK
+
+
+def tier_from_color(color) -> Tuple[int, int, int, int]:
+    """从 adapter 旧式色标反推副词条 tier 色。
+    紫族→TIER_GOD / 绿族→TIER_GOOD / 红族→TIER_BAD / 其他→TIER_NORMAL。"""
+    if color is None:
+        return TIER_NORMAL
+    try:
+        r, g, b = color[0], color[1], color[2]
+    except Exception:
+        return TIER_NORMAL
+    if r > 150 and b > 200 and g < 180:
+        return TIER_GOD
+    if g > 180 and r < 120:
+        return TIER_GOOD
+    if r > 220 and b < 130 and g < 130:
+        return TIER_BAD
+    return TIER_NORMAL
+
+
+def cost_pips(draw: ImageDraw.ImageDraw, x: int, y: int, cost: Optional[int],
+              accent=None, max_cost: int = 4) -> int:
+    """绘制 cost 菱形 pip 阵: 1/3/4 cost 用 1/3/4 个发光菱形 + 暗色占位。
+    返回最右端 x。 (x, y) 为左上锚点。"""
+    if cost is None or cost <= 0:
+        cost = 0
+    pip_w = 9
+    gap = 4
+    color = accent or (180, 200, 230, 255)
+    for i in range(max_cost):
+        cx = x + i * (pip_w + gap) + pip_w // 2
+        diamond = [(cx, y), (cx + pip_w // 2, y + pip_w // 2),
+                   (cx, y + pip_w), (cx - pip_w // 2, y + pip_w // 2)]
+        if i < cost:
+            draw.polygon(diamond, fill=color)
+            draw.point((cx, y + pip_w // 2), fill=(255, 255, 255, 255))
+        else:
+            draw.polygon(diamond, outline=(120, 130, 160, 140))
+    return x + max_cost * (pip_w + gap)
+
+
+def grade_chip(draw: ImageDraw.ImageDraw, x: int, y: int, grade: Optional[str],
+               anchor: str = "rm") -> None:
+    """评级胶囊: 圆角小标签, grade文字反白底主题色。"""
+    if not grade:
+        return
+    g = grade.upper()
+    bg = grade_color(g)
+    fnt = font("tektur", 18)
+    try:
+        tw = int(fnt.getlength(g))
+    except Exception:
+        tw = len(g) * 10
+    pad_x = 9
+    w = tw + pad_x * 2
+    h = 22
+    if anchor == "rm":
+        x0 = x - w
+        y0 = y - h // 2
+    elif anchor == "lm":
+        x0 = x
+        y0 = y - h // 2
+    else:
+        x0 = x - w // 2
+        y0 = y - h // 2
+    x1 = x0 + w
+    y1 = y0 + h
+    try:
+        draw.rounded_rectangle((x0, y0, x1, y1), radius=11, fill=bg)
+    except AttributeError:
+        draw.rectangle((x0, y0, x1, y1), fill=bg)
+    draw.text((x0 + w // 2, y0 + h // 2 - 1), g, font=fnt,
+              fill=(20, 24, 36, 255), anchor="mm")
+
+
+def score_bar(draw: ImageDraw.ImageDraw, bbox, score: Optional[float],
+              max_score: float = 50.0, accent=None) -> None:
+    """卡片底部细评分条 — 把 score 可视化成进度条占比。
+    bbox=(x0,y0,x1,y1), y1-y0 一般 3-4px。"""
+    x0, y0, x1, y1 = bbox
+    total_w = x1 - x0
+    radius = max(1, (y1 - y0) // 2)
+    try:
+        draw.rounded_rectangle((x0, y0, x1, y1), radius=radius,
+                               fill=(60, 75, 100, 140))
+    except AttributeError:
+        draw.rectangle((x0, y0, x1, y1), fill=(60, 75, 100, 140))
+    if score is None or score <= 0:
+        return
+    ratio = min(1.0, max(0.0, score / max_score))
+    fw = int(total_w * ratio)
+    if fw < 2:
+        return
+    color = accent or ACCENT_CYAN
+    try:
+        draw.rounded_rectangle((x0, y0, x0 + fw, y1), radius=radius, fill=color)
+    except AttributeError:
+        draw.rectangle((x0, y0, x0 + fw, y1), fill=color)
+    if fw >= 4:
+        draw.ellipse((x0 + fw - 3, y0 - 1, x0 + fw + 3, y1 + 1),
+                     fill=(color[0], color[1], color[2], 200))
+
+
+def side_accent_bar(draw: ImageDraw.ImageDraw, x: int, y0: int, y1: int,
+                    color, w: int = 4) -> None:
+    """卡片左侧色条 — 套装识别用。圆头胶囊形, 顶端微光。"""
+    radius = w // 2
+    try:
+        draw.rounded_rectangle((x, y0 + 4, x + w, y1 - 4), radius=radius,
+                               fill=color)
+    except AttributeError:
+        draw.rectangle((x, y0 + 4, x + w, y1 - 4), fill=color)
+    draw.ellipse((x - 1, y0 + 2, x + w + 1, y0 + 8),
+                 fill=(color[0], color[1], color[2], 180))

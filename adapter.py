@@ -184,6 +184,10 @@ def _fill_echoes(d, role_detail, calc_temp, total_score, total_grade, get_valid_
                 main_color = None
 
         name = str(getattr(prop_obj, "name", None) or "---").replace("·", " ")
+        # TODO[后端对接]: 后端在 phantomProp 上提供 sonataName/setName 字段后改成
+        #   sonata = getattr(prop_obj, "sonataName", None) or getattr(prop_obj, "setName", None)
+        # 当前空缺, 卡片渲染时走 sonata_color 的 fallback 色。
+        sonata = getattr(prop_obj, "sonataName", None) or getattr(prop_obj, "setName", None)
         echoes.append(schema.EchoCardData(
             name=name,
             level=getattr(ph, "level", None),
@@ -195,6 +199,7 @@ def _fill_echoes(d, role_detail, calc_temp, total_score, total_grade, get_valid_
             sub_props=sub_list[:5],
             main_color=main_color,
             sub_colors=sub_colors[:5],
+            sonata=sonata,
         ))
     d.echoes = echoes
 

@@ -49,41 +49,46 @@ def make_fake_data() -> schema.CardData:
         dmg_colors=[theme.ACCENT_VIOLET, None, None, None]
     )
     
-    # 5. 声骸个体明细
-    # 1号
+    # 5. 声骸个体明细 (方案D: 加上套装名让色条可见)
+    # 1号 — 冷凝主属性 → 凝夜白霜
     d.echoes.append(schema.EchoCardData(
         name="格洛羽团", level=25, score=41.69, grade="S", cost=4,
+        sonata="凝夜白霜",
         main_prop=schema.Prop("冷凝伤害加成", "30.0%"),
         sub_props=[schema.Prop("共鸣效率", "7.6%"), schema.Prop("攻击", "8.6%"), schema.Prop("普攻伤害加成", "8.6%"), schema.Prop("暴击伤害", "21.0%"), schema.Prop("暴击", "8.7%")],
         sub_colors=[theme.SUCCESS, None, theme.ACCENT_VIOLET, theme.ERROR, None]
     ))
-    # 2号
+    # 2号 — 暴击 → 凌冽决断之心
     d.echoes.append(schema.EchoCardData(
         name="虚造神型", level=25, score=22.07, grade="B", cost=4,
+        sonata="凌冽决断之心",
         main_prop=schema.Prop("暴击", "22.0%"),
         sub_props=[schema.Prop("攻击", "40"), schema.Prop("共鸣技能伤害", "7.1%"), schema.Prop("暴击伤害", "15.0%"), schema.Prop("共鸣效率", "10.8%"), schema.Prop("共鸣解放伤害", "10.1%")],
         sub_colors=[None, None, None, theme.SUCCESS, None]
     ))
-    # 3号
+    # 3号 — 冷凝 → 凝夜白霜
     d.echoes.append(schema.EchoCardData(
         name="重工铁骑", level=25, score=31.16, grade="A", cost=3,
+        sonata="凝夜白霜",
         main_prop=schema.Prop("冷凝伤害加成", "30.0%"),
         sub_props=[schema.Prop("防御", "10.9%"), schema.Prop("暴击伤害", "13.8%"), schema.Prop("普攻伤害加成", "8.6%"), schema.Prop("暴击", "8.1%"), schema.Prop("共鸣效率", "10.8%")],
         sub_colors=[None, None, theme.ACCENT_VIOLET, None, theme.SUCCESS]
     ))
-    # 4号
+    # 4号 — 攻击辅 → 啸谷长风
     d.echoes.append(schema.EchoCardData(
         name="影烁者", level=25, score=23.44, grade="B", cost=1,
+        sonata="啸谷长风",
         main_prop=schema.Prop("攻击", "18.0%"),
         sub_props=[schema.Prop("普攻伤害加成", "8.6%"), schema.Prop("暴击", "6.3%"), schema.Prop("攻击", "8.6%"), schema.Prop("共鸣解放伤害", "7.1%"), schema.Prop("重击伤害加成", "11.6%")],
         sub_colors=[theme.ACCENT_VIOLET, None, None, None, None]
     ))
-    # 5号
+    # 5号 — 攻击辅 → 啸谷长风
     d.echoes.append(schema.EchoCardData(
         name="颤栗战士", level=25, score=29.6, grade="A", cost=1,
+        sonata="啸谷长风",
         main_prop=schema.Prop("攻击", "18.0%"),
         sub_props=[schema.Prop("攻击", "10.1%"), schema.Prop("防御", "11.9%"), schema.Prop("暴击伤害", "15.0%"), schema.Prop("暴击", "6.3%"), schema.Prop("生命", "320")],
-        sub_colors=[None, None, None, None, None]
+        sub_colors=[None, theme.ERROR, None, None, theme.ERROR]
     ))
     
     # 6. 运算终端底部数据

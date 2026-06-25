@@ -102,6 +102,9 @@ class EchoCardData:
     # 每项是 RGBA 元组或 None(None=默认色)
     main_color: Optional[Tuple[int, int, int, int]] = None
     sub_colors: List[Optional[Tuple[int, int, int, int]]] = field(default_factory=list)
+    # 方案D 新增: 套装名(用于卡片色条/pill高亮)
+    # TODO[后端对接]: 后端在 phantomProp 上提供 sonataName / setName 字段后填充
+    sonata: Optional[str] = None
 
 
 @dataclass
