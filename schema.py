@@ -38,6 +38,7 @@ class IllustrationData:
     """左轨立绘。pile_image 为 PIL.Image 或 None(占位)。"""
     pile_image: object = None
     element_cn: Optional[str] = None       # 元素中文名(用于色调)
+    char_name: str = ""                    # 角色名(背景水印大字用)
 
 
 @dataclass
@@ -110,6 +111,24 @@ class SummaryData:
     total_grade: Optional[str] = None
     crit_rate: Optional[float] = None      # 暴击率% (数值, 如 72.3)
     crit_dmg: Optional[float] = None       # 暴击伤害% (数值, 如 258.6)
+    # 可选扩展字段(预留给 right_summary 后续启用,如伤害排名等):
+    damage_type: Optional[str] = None
+    crit_damage_expect: Optional[str] = None
+    avg_damage_expect: Optional[str] = None
+    score_rank: Optional[str] = None
+    damage_rank: Optional[str] = None
+
+
+@dataclass
+class EchoSummaryData:
+    """中轨声骸加成汇总(可选区块,如洛瑟菈需要)。"""
+    grade: Optional[str] = None
+    score: Optional[float] = None
+    template_name: str = ""
+    base_props: List[Prop] = field(default_factory=list)
+    dmg_props: List[Prop] = field(default_factory=list)
+    base_colors: List[Optional[Tuple[int, int, int, int]]] = field(default_factory=list)
+    dmg_colors: List[Optional[Tuple[int, int, int, int]]] = field(default_factory=list)
 
 
 @dataclass
@@ -124,3 +143,4 @@ class CardData:
     skills: SkillsData = field(default_factory=SkillsData)
     echoes: List[EchoCardData] = field(default_factory=list)   # 最多5
     summary: SummaryData = field(default_factory=SummaryData)
+    echo_summary: Optional["EchoSummaryData"] = None           # 可选: 中轨声骸加成汇总

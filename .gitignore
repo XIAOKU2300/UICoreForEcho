@@ -3,3 +3,7 @@ __pycache__/
 preview.png
 nul
 _rescue_backup/
+Python/
+*.png
+!assets/*.png
+!fonts/*
